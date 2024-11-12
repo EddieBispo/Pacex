@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, TextInput, Button, Text, FlatList, StyleSheet, Modal, TouchableOpacity } from 'react-native';
+import { View, TextInput, Button, Text, FlatList, StyleSheet, Modal, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { auth, firestore } from '../firebaseConfig';
 import { doc, setDoc, collection, getDocs, query, where, getDoc, deleteDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { calculateMedSchedule } from '../utils/calculateMedSchedule';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const HomeScreen = ({ navigation }: any) => {
   const [medName, setMedName] = useState('');
@@ -12,11 +13,12 @@ const HomeScreen = ({ navigation }: any) => {
   const [interval, setInterval] = useState('');
   const [duration, setDuration] = useState('');
   const [medications, setMedications] = useState<any[]>([]);
-  const [selectedMed, setSelectedMed] = useState<string>('');
+  const [selectedMed, setSelectedMed] = useState<string>('');  
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [userData, setUserData] = useState<{ name: string; id: string } | null>(null);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const checkUser = async () => {
@@ -44,6 +46,7 @@ const HomeScreen = ({ navigation }: any) => {
   }, []);
 
   const fetchMedications = async () => {
+    setLoading(true);
     try {
       const user = auth.currentUser;
       if (user) {
@@ -55,10 +58,19 @@ const HomeScreen = ({ navigation }: any) => {
       }
     } catch (error: any) {
       setError('Erro ao carregar medicamentos: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleAddMedication = async () => {
+    if (!medName || !startTime || !interval || !duration) {
+      setError('Todos os campos precisam ser preenchidos');
+      return;
+    }
+
+    setLoading(true);
+
     try {
       const user = auth.currentUser;
       if (!user) {
@@ -83,29 +95,39 @@ const HomeScreen = ({ navigation }: any) => {
       fetchMedications();
     } catch (error: any) {
       setError('Erro ao adicionar medicamento: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDeleteMedication = async (medicationId: string) => {
-    try {
-      await deleteDoc(doc(firestore, 'medications', medicationId));
-      fetchMedications();
-    } catch (error: any) {
-      setError('Erro ao excluir medicamento: ' + error.message);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigation.navigate('Login');
-    } catch (error: any) {
-      setError('Erro ao fazer logout: ' + error.message);
-    }
+  const handleDeleteMedication = (medicationId: string) => {
+    Alert.alert(
+      'Confirmação de exclusão',
+      'Você tem certeza que deseja excluir este medicamento?',
+      [
+        {
+          text: 'Cancelar',
+          onPress: () => console.log('Cancelado'),
+          style: 'cancel',
+        },
+        {
+          text: 'Excluir',
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(firestore, 'medications', medicationId));
+              fetchMedications();
+            } catch (error: any) {
+              setError('Erro ao excluir medicamento: ' + error.message);
+            }
+          },
+          style: 'destructive',
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const toggleExpandCard = (medId: string, startTime: string, interval: number, duration: number) => {
-    // Se o cartão está expandido, colapsar, se não, expandir e calcular os horários
     if (expandedCard === medId) {
       setExpandedCard(null);
     } else {
@@ -122,10 +144,10 @@ const HomeScreen = ({ navigation }: any) => {
     return (
       <TouchableOpacity onPress={() => toggleExpandCard(item.id, item.startTime, item.interval, item.duration)}>
         <View style={styles.medCard}>
-          <Text>Nome: {item.name}</Text>
-          <Text>Horário de Início: {item.startTime}</Text>
-          <Text>Intervalo: {item.interval}</Text>
-          <Text>Duração: {item.duration}</Text>
+          <Text style={styles.medCardTitle}>Nome: {item.name}</Text>
+          <Text style={styles.medCardText}>Horário de Início: {item.startTime}</Text>
+          <Text style={styles.medCardText}>Intervalo: {item.interval}</Text>
+          <Text style={styles.medCardText}>Duração: {item.duration}</Text>
 
           {isExpanded && (
             <View style={styles.scheduleContainer}>
@@ -138,7 +160,12 @@ const HomeScreen = ({ navigation }: any) => {
             </View>
           )}
 
-          <Button title="Excluir" onPress={() => handleDeleteMedication(item.id)} />
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDeleteMedication(item.id)}
+          >
+            <Text style={styles.deleteButtonText}>Excluir</Text>
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
@@ -150,12 +177,14 @@ const HomeScreen = ({ navigation }: any) => {
 
   return (
     <View style={styles.container}>
-      <Button title="Adicionar Medicamento" onPress={() => setShowForm(true)} />
-      <Button title="Conta" onPress={() => navigation.navigate('Account')} />
-      <Button title="Logout" onPress={handleLogout} color="red" />
+      <View style={styles.header}>
+        <Text style={styles.headerText}>{userData?.name}</Text>
+        <Button title="Conta" onPress={() => navigation.navigate('Account')} />
+      </View>
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Text>Filtrar medicamentos:</Text>
+      <Text style={styles.filterText}>Filtrar medicamentos:</Text>
       <Picker
         selectedValue={selectedMed}
         onValueChange={(itemValue) => setSelectedMed(itemValue)}
@@ -167,9 +196,17 @@ const HomeScreen = ({ navigation }: any) => {
         ))}
       </Picker>
 
-      <FlatList data={filteredMedications} renderItem={renderMedication} keyExtractor={(item) => item.id} />
+      {loading ? (
+        <ActivityIndicator size="large" color="#007bff" />
+      ) : (
+        <FlatList data={filteredMedications} renderItem={renderMedication} keyExtractor={(item) => item.id} />
+      )}
 
-      <Modal transparent={true} animationType="slide" visible={showForm} onRequestClose={() => setShowForm(false)}>
+      <TouchableOpacity style={styles.addButton} onPress={() => setShowForm(true)}>
+        <Icon name="add" size={40} color="#fff" />
+      </TouchableOpacity>
+
+      <Modal transparent={true} animationType="fade" visible={showForm} onRequestClose={() => setShowForm(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.card}>
             <TextInput
@@ -186,8 +223,12 @@ const HomeScreen = ({ navigation }: any) => {
             />
             <TextInput placeholder="Intervalo" value={interval} onChangeText={setInterval} style={styles.input} />
             <TextInput placeholder="Duração" value={duration} onChangeText={setDuration} style={styles.input} />
-            <Button title="Salvar Medicamento" onPress={handleAddMedication} />
-            <Button title="Fechar" onPress={() => setShowForm(false)} />
+            <TouchableOpacity style={styles.saveButton} onPress={handleAddMedication}>
+              <Text style={styles.saveButtonText}>Salvar Medicamento</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setShowForm(false)}>
+              <Text style={styles.closeButtonText}>Fechar</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -199,12 +240,77 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
+    backgroundColor: '#f8f9fa',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  headerText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  filterText: {
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  picker: {
+    height: 50,
+    width: '100%',
+    marginBottom: 16,
   },
   medCard: {
-    backgroundColor: '#f1f1f1',
+    backgroundColor: '#fff',
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 16,
     borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.8,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  medCardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  medCardText: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  scheduleContainer: {
+    marginTop: 10,
+  },
+  scheduleTitle: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  scheduleItem: {
+    fontSize: 14,
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'red',
+    padding: 6,
+    borderRadius: 4,
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 12,
+  },
+  addButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 30,
+    backgroundColor: '#6200EE',
+    borderRadius: 50,
+    padding: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContainer: {
     flex: 1,
@@ -214,37 +320,43 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#fff',
-    padding: 16,
+    padding: 20,
     width: '80%',
     borderRadius: 8,
   },
   input: {
     height: 40,
-    borderColor: 'gray',
+    borderColor: '#ddd',
     borderWidth: 1,
-    marginBottom: 12,
-    paddingHorizontal: 8,
+    borderRadius: 4,
+    marginBottom: 10,
+    paddingLeft: 10,
   },
-  picker: {
-    height: 50,
-    width: '100%',
-    marginVertical: 10,
+  saveButton: {
+    backgroundColor: '#6200EE',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  closeButton: {
+    backgroundColor: 'gray',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
   },
   error: {
     color: 'red',
-    marginBottom: 12,
-  },
-  scheduleContainer: {
-    marginTop: 10,
-    backgroundColor: '#e0e0e0',
-    padding: 10,
-    borderRadius: 8,
-  },
-  scheduleTitle: {
-    fontWeight: 'bold',
-  },
-  scheduleItem: {
-    paddingVertical: 4,
+    fontSize: 14,
+    marginBottom: 10,
   },
 });
 

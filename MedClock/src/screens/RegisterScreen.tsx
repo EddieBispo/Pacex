@@ -1,6 +1,6 @@
 // src/screens/RegisterScreen.tsx
 import React, { useState } from 'react';
-import { View, TextInput, Button, Text, StyleSheet } from 'react-native';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { auth, firestore } from '../firebaseConfig';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
@@ -28,6 +28,7 @@ const RegisterScreen = ({ navigation }: any) => {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.header}>Cadastro</Text>
       <TextInput
         placeholder="Nome"
         value={name}
@@ -48,8 +49,13 @@ const RegisterScreen = ({ navigation }: any) => {
         style={styles.input}
         secureTextEntry
       />
-      <Button title="Cadastrar" onPress={handleRegister} />
+      <TouchableOpacity onPress={handleRegister} style={styles.button}>
+        <Text style={styles.buttonText}>Cadastrar</Text>
+      </TouchableOpacity>
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.link}>
+        <Text style={styles.linkText}>Já tem uma conta? Faça login</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -58,18 +64,55 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 16,
+    backgroundColor: '#F5F5F5',
+  },
+  header: {
+    fontSize: 32,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 30,
   },
   input: {
-    height: 40,
-    borderColor: 'gray',
+    height: 50,
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     borderWidth: 1,
-    marginBottom: 12,
-    paddingHorizontal: 8,
+    borderColor: '#E0E0E0',
+    marginBottom: 15,
+    paddingHorizontal: 15,
+    fontSize: 16,
+  },
+  button: {
+    width: '100%',
+    backgroundColor: '#6200EE',
+    borderRadius: 8,
+    paddingVertical: 15,
+    marginBottom: 20,
+    alignItems: 'center',
+    elevation: 3,  // Sombra sutil
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '500',
   },
   error: {
-    color: 'red',
+    color: '#D32F2F',
     marginTop: 12,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  link: {
+    marginTop: 20,
+  },
+  linkText: {
+    color: '#6200EE',
+    fontSize: 16,
+    textDecorationLine: 'underline',
+    textAlign: 'center',
   },
 });
 

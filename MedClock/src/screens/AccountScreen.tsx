@@ -1,104 +1,73 @@
-// src/screens/AccountScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, StyleSheet } from 'react-native';
-import { auth, firestore } from '../firebaseConfig';
-import { doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { View, Text, Button, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { signOut } from 'firebase/auth';
+import { auth, firestore } from '../firebaseConfig';
+import { doc, getDoc } from 'firebase/firestore';
 
 const AccountScreen = ({ navigation }: any) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [userData, setUserData] = useState<{ name: string; email: string } | null>(null);
-  const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
+  const [userData, setUserData] = useState<{ name: string; email: string; photoURL: string | null } | null>(null);
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          setEmail(user.email || '');
+    const user = auth.currentUser;
+    if (user) {
+      const fetchUserData = async () => {
+        try {
           const userDocRef = doc(firestore, 'users', user.uid);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
-            setUserData({ name: userDoc.data()?.name, email: user.email || '' });
+            setUserData({
+              name: userDoc.data()?.name || 'Usuário',
+              email: userDoc.data()?.email || user.email || 'sem e-mail',
+              photoURL: user.photoURL || null,
+            });
           }
+        } catch (error) {
+          console.error('Erro ao carregar dados do usuário:', error);
         }
-      } catch (error) {
-        console.error('Erro ao carregar dados do usuário:', error);
-      }
-    };
+      };
 
-    fetchUserData();
-  }, []);
-
-  const handleChangeEmail = async () => {
-    if (!auth.currentUser) return;
-    try {
-      await auth.currentUser.updateEmail(newEmail);
-      const userDocRef = doc(firestore, 'users', auth.currentUser.uid);
-      await updateDoc(userDocRef, { email: newEmail });
-      setEmail(newEmail);
-      setNewEmail('');
-      alert('Email atualizado com sucesso!');
-    } catch (error) {
-      console.error('Erro ao atualizar email:', error);
-    }
-  };
-
-  const handleChangePassword = async () => {
-    if (!auth.currentUser) return;
-    try {
-      await auth.currentUser.updatePassword(newPassword);
-      setNewPassword('');
-      alert('Senha atualizada com sucesso!');
-    } catch (error) {
-      console.error('Erro ao atualizar senha:', error);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    if (!auth.currentUser) return;
-    try {
-      const userDocRef = doc(firestore, 'users', auth.currentUser.uid);
-      await deleteDoc(userDocRef);
-      await auth.currentUser.delete();
-      alert('Conta excluída com sucesso!');
-      signOut(auth);
+      fetchUserData();
+    } else {
       navigation.navigate('Login');
-    } catch (error) {
-      console.error('Erro ao excluir conta:', error);
     }
+  }, [navigation]);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigation.navigate('Login'); // Redireciona para a tela de Login após o logout
+    } catch (error) {
+      console.error('Erro ao fazer logout', error);
+    }
+  };
+
+  const handleEditAccount = () => {
+    navigation.navigate('EditAccount'); // Roteia para a tela de edição da conta
   };
 
   return (
     <View style={styles.container}>
-      {userData && (
-        <View style={styles.card}>
-          <Text>Nome: {userData.name}</Text>
-          <Text>Email: {userData.email}</Text>
-          <Text>Senha: {'*'.repeat(password.length)}</Text>
+      {userData ? (
+        <View style={styles.userInfo}>
+          <View style={styles.profileContainer}>
+            {userData.photoURL ? (
+              <Image source={{ uri: userData.photoURL }} style={styles.profileImage} />
+            ) : (
+              <View style={styles.profileImageFallback}>
+                <Text style={styles.profileImageText}>{userData.name[0]}</Text>
+              </View>
+            )}
+            <Text style={styles.userName}>{userData.name}</Text>
+            <Text style={styles.userEmail}>{userData.email}</Text>
+          </View>
+          
+          <TouchableOpacity style={styles.button} onPress={handleLogout}>
+            <Text style={styles.buttonText}>Sair</Text>
+          </TouchableOpacity>
         </View>
+      ) : (
+        <Text>Carregando dados do usuário...</Text>
       )}
-
-      <TextInput
-        placeholder="Novo Email"
-        value={newEmail}
-        onChangeText={setNewEmail}
-        style={styles.input}
-      />
-      <Button title="Alterar Email" onPress={handleChangeEmail} />
-
-      <TextInput
-        placeholder="Nova Senha"
-        value={newPassword}
-        onChangeText={setNewPassword}
-        style={styles.input}
-        secureTextEntry
-      />
-      <Button title="Alterar Senha" onPress={handleChangePassword} />
-
-      <Button title="Excluir Conta" onPress={handleDeleteAccount} color="red" />
     </View>
   );
 };
@@ -106,20 +75,63 @@ const AccountScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 16,
   },
-  card: {
-    backgroundColor: '#f1f1f1',
-    padding: 16,
-    marginBottom: 12,
-    borderRadius: 8,
+  header: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
   },
-  input: {
-    height: 40,
-    borderColor: 'gray',
-    borderWidth: 1,
-    marginBottom: 12,
-    paddingHorizontal: 8,
+  userInfo: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  profileContainer: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  profileImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 10,
+  },
+  profileImageFallback: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#007BFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  profileImageText: {
+    color: 'white',
+    fontSize: 40,
+    fontWeight: 'bold',
+  },
+  userName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  userEmail: {
+    fontSize: 16,
+    color: '#555',
+  },
+  button: {
+    backgroundColor: '#007BFF',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 5,
+    marginTop: 10,
+    width: '80%',
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
   },
 });
 
